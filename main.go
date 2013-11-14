@@ -77,7 +77,7 @@ func createClient(id int) {
         log.Fatalf("Could not create client %v:\n%v\nshutting down...", id, err)
     }
 
-    clients[id] = client
+    clients = append(clients, client)
 
     log.Printf("Client %v created.", id)
 }
