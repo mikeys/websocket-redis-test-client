@@ -1,32 +1,68 @@
 package main
 
 import (
+    "flag"
     "log"
+    "time"
+    "math/rand"
     "os"
     "os/signal"
     "syscall"
-    "github.com/mikeys/go-websocket-redis-test1/wsloadtest"
+    "github.com/mikeys/websocket-redis-test-client/wsloadtest"
 )
 
 const (
-    defaultNumberOfClients = 249
-    testUrl = "ws://localhost:8080"
+    minInitialDelayInSeconds = 0
+    maxInitialDelayInSeconds = 10
 )
 
 var (
+    testUrl string
+    numberOfClients int
+    numberOfRequestsPerMinute int
+    
     clients []*wsloadtest.Client
 )
 
+func init() {
+    const (
+        defaultTestUrl = "ws://localhost:8080"
+        defaultNumberOfClients = 100
+        defaultNumberOfRequestsPerMinute = 40
+
+        testUrlDesc = "Websocket server URL"
+        numberOfClientsDesc = "Number of websocket clients to load"
+        numberOfRequestsPerMinuteDesc = "Number of requests each client will execute"
+    )
+
+    flag.StringVar(&testUrl, "test-url", defaultTestUrl, testUrlDesc)
+    flag.StringVar(&testUrl, "u", defaultTestUrl, testUrlDesc + " (shorthand)")
+    flag.IntVar(&numberOfClients, "number-of-clients", defaultNumberOfClients, numberOfClientsDesc)
+    flag.IntVar(&numberOfClients, "c", defaultNumberOfClients, numberOfClientsDesc + " (shorthand)")
+    flag.IntVar(&numberOfRequestsPerMinute, "requests-per-minute", defaultNumberOfRequestsPerMinute, numberOfRequestsPerMinuteDesc)
+    flag.IntVar(&numberOfRequestsPerMinute, "r", defaultNumberOfRequestsPerMinute, numberOfRequestsPerMinuteDesc + " (shorthand)")
+}
+
 func main() {
-    log.Printf("Press Ctrl-C to exit.")
+    flag.Parse()
+    printSettings()
     createClients()
     waitForSignalAndShutdown()
 }
 
-func createClients() {
-    clients = make([]*wsloadtest.Client, defaultNumberOfClients, defaultNumberOfClients)
+func printSettings() {
+    log.Printf("Generating %v websocket clients", numberOfClients)
+    log.Printf("Websocket server URL: %v", testUrl)
+    log.Printf("Number of requests per minute: %v", numberOfRequestsPerMinute)
+    log.Printf("Press Ctrl-C at any time to exit...")
+    log.Printf("===============================\n")
+    time.Sleep(time.Duration(5) * time.Second)
+}
 
-    for i := 0; i < defaultNumberOfClients; i++ {
+func createClients() {
+    clients = make([]*wsloadtest.Client, numberOfClients, numberOfClients)
+
+    for i := 0; i < numberOfClients; i++ {
         createClient(i)
     }
 }
@@ -34,7 +70,7 @@ func createClients() {
 func createClient(id int) {
     log.Printf("Creating client %v...", id)
 
-    profile := wsloadtest.ClientProfile{Id: id, NumberOfRequestsPerMinute: 10}
+    profile := buildClientProfile(id)
     client, err := wsloadtest.NewClient(testUrl, &profile)
   
     if err != nil {
@@ -44,6 +80,17 @@ func createClient(id int) {
     clients[id] = client
 
     log.Printf("Client %v created.", id)
+}
+
+func buildClientProfile(id int) wsloadtest.ClientProfile {
+    return wsloadtest.ClientProfile{Id: id,
+        NumberOfRequestsPerMinute: numberOfRequestsPerMinute,
+        InitialDelayInSeconds: generateRandomDelayInSeconds()}
+}
+
+func generateRandomDelayInSeconds() float32 {
+    randomInt := rand.Intn(maxInitialDelayInSeconds - minInitialDelayInSeconds) + minInitialDelayInSeconds
+    return float32(randomInt) + rand.Float32()
 }
 
 func waitForSignalAndShutdown() {

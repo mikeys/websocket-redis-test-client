@@ -15,6 +15,7 @@ type Client struct {
 type ClientProfile struct {
     Id int
     NumberOfRequestsPerMinute int
+    InitialDelayInSeconds float32
 }
 
 const (
@@ -49,22 +50,33 @@ func (cli *Client) sleepDuration() time.Duration {
     sleepAsString := fmt.Sprintf("%vs", sleepAsFloat)
     duration, _ := time.ParseDuration(sleepAsString)
 
-    log.Printf("%v", sleepAsString)
+    return duration
+}
 
+func (cli *Client) initialSleepDuration() time.Duration {
+    sleepAsString := fmt.Sprintf("%vs", cli.profile.InitialDelayInSeconds)
+    duration, _ := time.ParseDuration(sleepAsString)
+    
     return duration
 }
 
 func (cli *Client) writer() {
+    // This was added so clients will send requests in different times
+    // even though their number of requests per minute is the same.
+    time.Sleep(cli.initialSleepDuration())
+
     sleepDuration := cli.sleepDuration()
 
     for {
-        time.Sleep(sleepDuration)
         cli.log("sending 'hello' to the remote server.")
         err := websocket.Message.Send(cli.ws, "hello")
+        
         if err != nil {
             cli.log("could not send message (%v).", err)
             break
         }
+
+        time.Sleep(sleepDuration)
     }
 
     cli.Close()
